@@ -1,0 +1,589 @@
+/*-------------------------------------------------------------
+	腳本名稱: 內掛系統
+	腳本作者: 小玥
+	更新日期: 2023/2/24
+	腳本內容:
+---------------------------------------------------------------
+    ※ 腳本禁止轉售 轉載請保留以上內容 ※
+-------------------------------------------------------------*/
+-	script	bot_ai	-1,{
+	function refresh;
+	function times;
+
+// 主選單
+OnCommand:
+	if( @bot_on )
+	{
+		@bot_on = 0;
+		deltimer strnpcinfo(0)+"::OnBot";
+		end;
+	}
+	.@askill$ = "";
+	.@sskill$ = "";
+	.@sitem$ = "";
+	.@hp$ = "";
+	.@sp$ = "";
+	refresh;
+	mes "狀態 ["+(@bot_on?"^40BAFF開":"^FF4040關")+"^000000] (^FF4040剩餘"+times(bot_time)+"^000000)";
+	mes "模式 [^40BAFF"+(bot_mode?"攻擊模式":"輔助模式")+"^000000] 目標 [^FFBA40"+(bot_target?strmobinfo(2,bot_target):"所有魔物")+"^000000]";
+	if( bot_hp_item > 0 )
+		mes "HP道具 [^1DDB2A低於"+bot_hp_percent+"%時,使用"+getitemname(bot_hp_item)+"^000000]";
+	else
+		mes "HP道具 [^1DDB2A未設置^000000]";
+	if( bot_sp_item > 0 )
+		mes "SP道具 [^1DDB2A低於"+bot_sp_percent+"%時,使用"+getitemname(bot_sp_item)+"^000000]";
+	else
+		mes "SP道具 [^1DDB2A未設置^000000]";
+	for( .@i = 0; .@i < getarraysize(bot_askill); .@i++ )
+		if( bot_askill[.@i] > -1 )
+			.@askill$ += getskillinfo(SKI_DESCRIPTION,bot_askill[.@i]) + "("+bot_askill_cd[.@i]+"s),";
+	.@askill$ = substr(.@askill$,0,getstrlen(.@askill$)-2);
+	mes "主動技能: ^E866A7"+(.@askill$==""?"未設置":.@askill$)+"^000000";
+	for( .@i = 0; .@i < getarraysize(bot_sskill); .@i++ )
+		if( bot_sskill[.@i] > -1 )
+			.@sskill$ += getskillinfo(SKI_DESCRIPTION,bot_sskill[.@i]) + "("+bot_sskill_cd[.@i]+"s),";
+	.@sskill$ = substr(.@sskill$,0,getstrlen(.@sskill$)-2);
+	mes "輔助技能: ^E866A7"+(.@sskill$==""?"未設置":.@sskill$)+"^000000";
+	for( .@i = 0; .@i < getarraysize(bot_sitem); .@i++ )
+		if( bot_sitem[.@i] > -1 )
+			.@sitem$ += getitemname(bot_sitem[.@i]) + "("+bot_sitem_cd[.@i]+"s),";
+	.@sitem$ = substr(.@sitem$,0,getstrlen(.@sitem$)-2);
+	mes "輔助道具: ^E866A7"+(.@sitem$==""?"未設置":.@sitem$)+"^000000";
+	next;
+	switch( select((@bot_on>0?"停止掛機":"開始掛機"),"設定掛機模式","設定掛機目標","設定主動技能","設定輔助技能","設定輔助道具","設定HP道具","設定SP道具") )
+	{
+		case 1:
+			if( @bot_on )
+			{
+				@bot_on = 0;
+				deltimer strnpcinfo(0)+"::OnBot";
+			}
+			else
+			{
+				@bot_on = 1;
+				@bot_target = 0;
+				@bot_attack = 0;
+				@bot_noattack = 0;
+				@bot_walk = 0;
+				@bot_idle = 0;
+				setarray @bot_askill_cd, 1, 2, 3, 4, 5;
+				setarray @bot_sskill_cd, 1, 2, 3, 4, 5;
+				setarray @bot_sitem_cd, 1, 2, 3, 4, 5;
+				addtimer 1000,strnpcinfo(0)+"::OnBot";
+			}
+			close;
+			break;
+		case 2:
+			.@s = select("攻擊模式","輔助模式");
+			if( .@s == 1 ) bot_mode = 1;
+			if( .@s == 2 ) bot_mode = 0;
+			break;
+		case 3:
+			input .@id;
+			if( strmobinfo(3,.@id) )
+				bot_target = .@id;
+			else
+				bot_target = 0;
+			break;
+		case 4:
+			getskilllist;
+			.@sk$ = "取消設定:";
+			for( .@i = 0; .@i < @skilllist_count; .@i++ ) .@sk$ += getskillinfo(SKI_DESCRIPTION,@skilllist_id[.@i]) + ":";
+			.@s$ = "";
+			if( getarraysize(bot_askill) < 5 ) setarray bot_askill, -1, -1, -1, -1, -1;
+			for( .@i = 0; .@i < 5; .@i++ )
+				if( bot_askill[.@i] > -1 )
+					.@s$ += "("+(.@i+1)+") "+getskillinfo(SKI_DESCRIPTION,bot_askill[.@i])+":";
+				else
+					.@s$ += "("+(.@i+1)+") 未設置:";
+			.@s = select(.@s$) - 1;
+			bot_askill_cd[.@s] = .bot_askill_cooldown[0];
+			if( 0 <= .@s && .@s < 5 )
+			{
+				.@sk = select(.@sk$);
+				if( .@sk == 1 ) 
+					bot_askill[.@s] = -1;
+				else
+					bot_askill[.@s] = @skilllist_id[.@sk-2];
+			}
+			.@cd$ = "取消設定:";
+			for( .@i = 0; .@i < getarraysize(.bot_askill_cooldown); .@i++ )
+			{
+				.@cd$ = .@cd$ + "延遲 " + .bot_askill_cooldown[.@i] + " 秒:";
+			}
+			.@cd = select(.@cd$);
+			if( .@cd == 1 )
+			{
+				bot_askill[.@s] = -1;
+				bot_askill_cd[.@s] = .bot_askill_cooldown[0];
+			}
+			else
+			{
+				bot_askill_cd[.@s] = .bot_askill_cooldown[.@cd-2];
+			}
+			break;
+		case 5:
+			getskilllist;
+			.@sk$ = "取消設定:";
+			for( .@i = 0; .@i < @skilllist_count; .@i++ ) .@sk$ += getskillinfo(SKI_DESCRIPTION,@skilllist_id[.@i]) + ":";
+			.@s$ = "";
+			if( getarraysize(bot_sskill) < 5 ) setarray bot_sskill, -1, -1, -1, -1, -1;
+			for( .@i = 0; .@i < 5; .@i++ )
+				if( bot_sskill[.@i] > -1 )
+					.@s$ += "("+(.@i+1)+") "+getskillinfo(SKI_DESCRIPTION,bot_sskill[.@i])+":";
+				else
+					.@s$ += "("+(.@i+1)+") 未設置:";
+			.@s = select(.@s$) - 1;
+			if( 0 <= .@s && .@s < 5 )
+			{
+				.@sk = select(.@sk$);
+				if( .@sk == 1 ) 
+					bot_sskill[.@s] = -1;
+				else
+					bot_sskill[.@s] = @skilllist_id[.@sk-2];
+			}
+			.@cd$ = "取消設定:";
+			for( .@i = 0; .@i < getarraysize(.bot_sskill_cooldown); .@i++ )
+			{
+				.@cd$ = .@cd$ + "延遲 " + .bot_sskill_cooldown[.@i] + " 秒:";
+			}
+			.@cd = select(.@cd$);
+			if( .@cd == 1 )
+			{
+				bot_sskill[.@s] = -1;
+				bot_sskill_cd[.@s] = .bot_sskill_cooldown[0];
+			}
+			else
+			{
+				bot_sskill_cd[.@s] = .bot_sskill_cooldown[.@cd-2];
+			}
+			break;
+		case 6:
+			getinventorylist;
+			deletearray .@item[0], getarraysize(.@item);
+			.@item$ = "取消設定:";
+			for( .@i = 0; .@i < @inventorylist_count; .@i++ )
+			{
+				.@id = @inventorylist_id[.@i];
+				.@type = getiteminfo(.@id,2);
+				if( .@type == 0 || .@type == 2 || .@type == 11 )
+				{
+					.@item$ += getitemname(.@id) + ":";
+					setarray .@item[getarraysize(.@item)], .@id;
+				}
+			}
+			.@s$ = "";
+			if( getarraysize(bot_sitem) < 5 ) setarray bot_sitem, -1, -1, -1, -1, -1;
+			for( .@i = 0; .@i < 5; .@i++ )
+				if( bot_sitem[.@i] > -1 )
+					.@s$ += "("+(.@i+1)+") "+getitemname(bot_sitem[.@i])+":";
+				else
+					.@s$ += "("+(.@i+1)+") 未設置:";
+			.@s = select(.@s$) - 1;
+			if( 0 <= .@s && .@s < 5 )
+			{
+				.@id = select(.@item$);
+				if( .@id == 1 ) 
+					bot_sitem[.@s] = -1;
+				else
+					bot_sitem[.@s] = .@item[.@id-2];
+			}
+			.@cd$ = "取消設定:";
+			for( .@i = 0; .@i < getarraysize(.bot_sitem_cooldown); .@i++ )
+			{
+				.@cd$ = .@cd$ + "延遲 " + .bot_sitem_cooldown[.@i] + " 秒:";
+			}
+			.@cd = select(.@cd$);
+			if( .@cd == 1 )
+			{
+				bot_sitem[.@s] = -1;
+				bot_sitem_cd[.@s] = .bot_sitem_cooldown[0];
+			}
+			else
+			{
+				bot_sitem_cd[.@s] = .bot_sitem_cooldown[.@cd-2];
+			}
+			break;
+		case 7:
+			getinventorylist;
+			deletearray .@item[0], getarraysize(.@item);
+			.@item$ = "取消設定:";
+			for( .@i = 0; .@i < @inventorylist_count; .@i++ )
+			{
+				.@id = @inventorylist_id[.@i];
+				.@type = getiteminfo(.@id,2);
+				if( .@type == 0 || .@type == 2 || .@type == 11 )
+				{
+					.@item$ += getitemname(.@id) + ":";
+					setarray .@item[getarraysize(.@item)], .@id;
+				}
+			}
+			.@s = select(.@item$);
+			if( .@s == 1 )
+			{
+				bot_hp_item = -1;
+				bot_hp_percent = -1;
+			}
+			else
+			{
+				dispbottom "請輸入低於多少百分比時使用HP道具?";
+				input .@n;
+				if( 0 <= .@n && .@n <= 100 )
+				{
+					bot_hp_item = .@item[.@s-2];
+					bot_hp_percent = .@n;
+				}
+				else
+				{
+					dispbottom "輸入錯誤!";
+					bot_hp_item = -1;
+					bot_hp_percent = -1;
+				}
+			}
+			break;
+		case 8:
+			getinventorylist;
+			deletearray .@item[0], getarraysize(.@item);
+			.@item$ = "取消設定:";
+			for( .@i = 0; .@i < @inventorylist_count; .@i++ )
+			{
+				.@id = @inventorylist_id[.@i];
+				.@type = getiteminfo(.@id,2);
+				if( .@type == 0 || .@type == 2 || .@type == 11 )
+				{
+					.@item$ += getitemname(.@id) + ":";
+					setarray .@item[getarraysize(.@item)], .@id;
+				}
+			}
+			.@s = select(.@item$);
+			if( .@s == 1 )
+			{
+				bot_sp_item = -1;
+				bot_sp_percent = -1;
+			}
+			else
+			{
+				dispbottom "請輸入低於多少百分比時使用SP道具?";
+				input .@n;
+				if( 0 <= .@n && .@n <= 100 )
+				{
+					bot_sp_item = .@item[.@s-2];
+					bot_sp_percent = .@n;
+				}
+				else
+				{
+					dispbottom "輸入錯誤!";
+					bot_sp_item = -1;
+					bot_sp_percent = -1;
+				}
+			}
+			break;
+	}
+	goto OnCommand;
+close;
+
+OnPCLoginEvent:
+	refresh;
+end;
+
+OnBot:
+	// @bot_attack 是否攻擊中
+	// @bot_walk 是否走路中
+	// @bot_idle 待機計算
+	if( @bot_on && bot_time )
+	{
+		.@aid = getcharid(3); // 玩家GID
+		getmapxy(.@map$,.@x,.@y); // 獲取座標資料
+		
+		if( inarray(.bot_blockmap$,.@map$) > -1 )
+		{
+			dispbottom "[內掛系統]: 此地圖無法使用內掛! 停止掛機!";
+			@bot_on = 0;
+		}
+		
+		if( @bot_noattack >= 5  ) // 5秒內沒有攻擊目標
+		{
+			@bot_noattack = 0;
+			if( .bot_warp > 0 && countitem(601) > 0  )
+			{
+				dispbottom "[內掛系統]: 超過5秒沒有攻擊目標,執行瞬移";
+				if( getmapflag(.@map$,nowarp) )
+				{
+					dispbottom "[內掛系統]: 此地圖無法使用蒼蠅翅膀";
+				}
+				else
+				{
+					if( @bot_walk )
+					{
+						@bot_walk = 0;
+						unitstopwalk .@aid,USW_FORCE_STOP;
+					}
+					@bot_attack = 0;
+					@bot_noattack = 0;
+					@bot_target = 0;
+					delitem 601, 1;
+					warp strcharinfo(3),0,0;
+				}
+			}
+			else
+			{
+				dispbottom "[內掛系統]: 沒有蒼蠅翅膀可以瞬移";
+			}
+			goto Walk;
+		}
+		
+		// 怪物是否存在
+		if( @bot_target )
+		{
+			if( unitexists(@bot_target) )
+			{
+				getunitdata(@bot_target,.@data);
+				if( .@data[UMOB_HP] == 0 )
+				{
+					dispbottom "[內掛系統]: 目標魔物不存在,停止攻擊";
+					@bot_target = 0;
+					@bot_attack = 0;
+					@bot_idle = 0;
+				}
+			}
+		}
+		
+		if( @bot_attack && @bot_idle > 5 ) // 攻擊超過5秒則放棄攻擊
+		{
+			dispbottom "[內掛系統]: 攻擊時間過長停止攻擊";
+			@bot_target = 0;
+			@bot_attack = 0;
+			@bot_idle = 0;
+			if( .bot_warp > 0 && countitem(601) > 0  ) // 判斷是否能用蒼翅
+			{
+				if( getmapflag(.@map$,nowarp) )
+				{
+					dispbottom "[內掛系統]: 此地圖無法使用蒼蠅翅膀";
+				}
+				else
+				{
+					if( @bot_walk )
+					{
+						@bot_walk = 0;
+						unitstopwalk .@aid,USW_FORCE_STOP;
+					}
+					@bot_noattack = 0;
+					delitem 601, 1;
+					warp strcharinfo(3),0,0;
+				}
+			}
+			else
+			{
+				dispbottom "[內掛系統]: 沒有蒼蠅翅膀可以瞬移";
+			}
+			goto Walk;
+		}
+		
+		if( @bot_walk && @bot_idle > 3 ) // 走路超過3秒則放棄走路
+		{
+			dispbottom "[內掛系統]: 走路時間過長停止走路";
+			unitstopwalk .@aid,USW_FORCE_STOP;
+			@bot_walk = 0;
+			@bot_idle = 0;
+		}
+		
+		// 主動技能
+		if( @bot_attack && bot_mode )
+		{
+			for( .@i = 0; .@i < 5; .@i++ )
+			{
+				if( bot_askill[.@i] > -1 )
+				{
+					if( @bot_askill_cd[.@i] < 1 && getskilllv(bot_askill[.@i]) )
+					{
+						@bot_askill_cd[.@i] = bot_askill_cd[.@i];
+						if( getskillinfo(SKI_CASTTYPE,bot_askill[.@i]) == CAST_DAMAGE )
+							unitskilluseid .@aid, bot_askill[.@i], getskilllv(bot_askill[.@i]), @bot_target;
+						if( getskillinfo(SKI_CASTTYPE,bot_askill[.@i]) == CAST_GROUND )
+							unitskillusepos .@aid, bot_askill[.@i], getskilllv(bot_askill[.@i]), .@data[UMOB_X], .@data[UMOB_Y];
+					}
+					else
+					{
+						@bot_askill_cd[.@i] = @bot_askill_cd[.@i] - 1;
+					}
+				}
+			}
+		}
+		
+		// 輔助技能
+		for( .@i = 0; .@i < 5; .@i++ )
+		{
+			if( bot_sskill[.@i] > -1 )
+			{
+				if( @bot_sskill_cd[.@i] < 1 && getskilllv(bot_askill[.@i]) )
+				{
+					@bot_sskill_cd[.@i] = bot_sskill_cd[.@i];
+					if( getskillinfo(SKI_TARGETTYPE,bot_sskill[.@i]) == 4 || getskillinfo(SKI_TARGETTYPE,bot_sskill[.@i]) == 16 )
+						unitskilluseid .@aid, bot_sskill[.@i], getskilllv(bot_sskill[.@i]), .@aid;
+				}
+				else
+				{
+					@bot_sskill_cd[.@i] = @bot_sskill_cd[.@i] - 1;
+				}
+			}
+		}
+		
+		// 輔助道具
+		for( .@i = 0; .@i < 5; .@i++ )
+		{
+			if( bot_sitem[.@i] > -1 )
+			{
+				if( @bot_sitem_cd[.@i] < 1 )
+				{
+					@bot_sitem_cd[.@i] = bot_sitem_cd[.@i];
+					if( countitem(bot_sitem[.@i]) )
+					{
+						consumeitem(bot_sitem[.@i]);
+						specialeffect2 320;
+					}
+				}
+				else
+				{
+					@bot_sitem_cd[.@i] = @bot_sitem_cd[.@i] - 1;
+				}
+			}
+		}
+		
+		// HP道具
+		if( bot_hp_item )
+		{
+			.@p = HP * 100 / MAXHP;
+			if( countitem(bot_hp_item) && .@p <= bot_hp_percent )
+			{
+				delitem bot_hp_item, 1;
+				consumeitem(bot_hp_item);
+				specialeffect2 210;
+			}
+		}
+		
+		// SP道具
+		if( bot_sp_item )
+		{
+			.@p = SP * 100 / MAXSP;
+			if( countitem(bot_sp_item) && .@p <= bot_sp_percent )
+			{
+				delitem bot_sp_item, 1;
+				consumeitem(bot_sp_item);
+				specialeffect2 211;
+			}
+		}
+		
+		// 攻擊判定
+		if( !@bot_attack && !@bot_walk && !@bot_idle && !@bot_target && bot_mode )
+		{
+			.@num = getareaunits(BL_MOB, .@map$, .@x-7, .@y-7, .@x+7, .@y+7, .@gid);
+			if( .@num )
+			{
+				Attack: // 攻擊
+				while( @bot_target == 0 )
+				{
+					.@r = rand(getarraysize(.@gid));
+					if( getarraysize(.@gid) == 0 ) goto Walk;
+					getunitdata(.@gid[.@r],.@data);
+					if( .@data[UMOB_HP] > 0 && ( getunittarget(.@gid[.@r]) == .@aid || !getunittarget(.@gid[.@r]) ) )
+					{
+						@bot_target = .@gid[.@r];
+						dispbottom "[內掛系統]: 偵測到可攻擊魔物 \'"+getunitname(@bot_target)+"\'";
+					}
+					else
+						deletearray .@gid[.@r], 1;
+						
+				}
+				@bot_noattack = 0;
+				@bot_attack = 1;
+				.@tid = @bot_target;
+				dispbottom "[內掛系統]: 執行攻擊";
+				detachrid;
+				unitattack(.@aid, .@tid, 1);
+				attachrid .@aid;
+			}
+			else
+			{
+				dispbottom "[內掛系統]: 偵測不到任何可攻擊魔物";
+			Walk: // 走路
+				getfreecell(.@map$, .@rx, .@ry, .@x, .@y, 5, 5);
+				@bot_walk = 1;
+				unitwalk 0, .@rx, .@ry, strnpcinfo(0)+"::OnWalked";
+				dispbottom "[內掛系統]: 執行走路";
+			}
+		}
+		@bot_idle++;
+		@bot_noattack++;
+		bot_time--;
+		addtimer 1000,strnpcinfo(0)+"::OnBot";
+	}
+	else
+	{
+		@bot_on = 1;
+		@bot_target = 0;
+		@bot_attack = 0;
+		@bot_walk = 0;
+		@bot_idle = 0;
+		setarray @bot_askill_cd, 1, 2, 3, 4, 5;
+		setarray @bot_sskill_cd, 1, 2, 3, 4, 5;
+		setarray @bot_sitem_cd, 1, 2, 3, 4, 5;
+		dispbottom "[內掛系統]: 已停止掛機";
+		deltimer strnpcinfo(0)+"::OnBot";
+	}
+end;
+
+OnWalked:
+	dispbottom "[內掛系統]: 已走到指定地點";
+	@bot_walk = 0;
+	@bot_idle = 0;
+end;
+
+
+function	refresh	{
+	if( atoi(bot_time$) != gettime(DT_YYYYMMDD) )
+	{
+		bot_time$ = gettime(DT_YYYYMMDD);
+		bot_time = .bot_time;
+	}
+	return;
+}
+
+function	times	{
+	.@t = getarg(0);
+	.@h = .@t / 3600;
+	.@m = (.@t - .@h * 3600) / 60;
+	.@s = .@t - .@h * 3600 - .@m * 60;
+	return .@h+"時"+.@m+"分"+.@s+"秒";
+}
+
+OnInit:
+	//==============================
+	//    參數設定
+	//==============================
+	
+		setarray .bot_askill_cooldown, // 主動技能可設定延遲時間(秒)
+			3, 5, 10, 30, 60;
+			
+		setarray .bot_sskill_cooldown, // 輔助技能可設定延遲時間(秒)
+			60, 180, 300, 600;
+			
+		setarray .bot_sitem_cooldown, // 道具可設定延遲時間(秒)
+			20, 60, 600, 900;
+	
+		.bot_time = 7200; // 每日恢復掛機時間(秒)
+		
+		.bot_warp = 1; // 卡點能否使用蒼蠅翅膀(0=否/1=是)
+		
+		setarray .bot_blockitem, // 禁用道具列表
+			601;
+			
+		setarray .bot_blockskill, // 禁用技能列表
+			26,27;
+			
+		setarray .bot_blockmap$, // 禁用地圖列表
+			"prontera";
+		
+	//==============================
+	bindatcmd "bot",strnpcinfo(0)+"::OnCommand";
+end;
+}
